@@ -1,0 +1,52 @@
+<div class="container">
+  <h1>Price Tracker Egypt</h1>
+
+  <div class="search-box">
+    <input type="text" [(ngModel)]="searchText" placeholder="Search for a product..." />
+
+    <button (click)="search()">
+      Search
+    </button>
+  </div>
+
+  @if (loading) {
+  <p>Loading...</p>
+  }
+
+  @if (products.length > 0) {
+  <div class="best-price">
+    🏆 Best Price:
+    {{ products[0].price }} EGP
+    from
+    {{ products[0].store }}
+  </div>
+  }
+
+  <select>
+    <option>All Stores</option>
+    <option>Amazon Egypt</option>
+    <option>2B</option>
+  </select>
+
+  @for (product of products; track product.url) {
+  <div class="product-card">
+    <img [src]="product.image" [alt]="product.title">
+
+    <h3>{{ product.title }}</h3>
+
+    <p>
+      {{ product.price }}
+      EGP
+    </p>
+
+    <p>
+      Store:
+      {{ product.store }}
+    </p>
+
+    <a [href]="product.url" target="_blank">
+      Open Product
+    </a>
+  </div>
+  }
+</div>
