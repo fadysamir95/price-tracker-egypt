@@ -6,7 +6,6 @@ import { Product, StoreSearchService } from './product-search.types';
 @Injectable()
 export class BtechService implements StoreSearchService {
   async search(query: string): Promise<Product[]> {
-    void query;
     console.log('BTECH SERVICE CALLED');
 
     const browser = await chromium.launch({
@@ -15,7 +14,7 @@ export class BtechService implements StoreSearchService {
 
     const page = await browser.newPage();
 
-    const searchUrl = `https://www.btech.com/en/c/mobiles-tablets/mobile-phones/b/apple`;
+    const searchUrl = `https://www.btech.com/en/catalogsearch/result/?q=${encodeURIComponent(query)}`;
 
     await page.goto(searchUrl, {
       waitUntil: 'domcontentloaded',
@@ -41,8 +40,50 @@ export class BtechService implements StoreSearchService {
     console.log('BTECH PAGE TITLE:', title);
     console.log('BTECH LINKS COUNT:', linksCount);
 
+    const products = await page.$$eval('a[href]', (links): Product[] => {
+      const productMap = new Map<string, Product>();
+
+      links.forEach((link) => {
+        const url = link.getAttribute('href') || '';
+        const text = link.textContent?.replace(/\s+/g, ' ').trim() || '';
+        const imageElement = link.querySelector('img');
+        const title =
+          imageElement?.getAttribute('alt')?.trim() ||
+          link.getAttribute('title')?.trim() ||
+          text;
+
+        const priceText =
+          text.match(/(?:EGP|ج\.م)\s*[\d,.]+|[\d,.]+\s*(?:EGP|ج\.م)/i)?.[0] ||
+          '';
+        const price = Number(priceText.replace(/[^\d.]/g, ''));
+
+        if (
+          !title.toLowerCase().includes('iphone') ||
+          !title.includes('16') ||
+          Number.isNaN(price) ||
+          price <= 5000
+        ) {
+          return;
+        }
+
+        const absoluteUrl = url.startsWith('http')
+          ? url
+          : `https://www.btech.com${url.startsWith('/') ? url : `/${url}`}`;
+
+        productMap.set(absoluteUrl, {
+          title,
+          price,
+          image: imageElement?.getAttribute('src') || '',
+          url: absoluteUrl,
+          store: 'B.TECH',
+        });
+      });
+
+      return [...productMap.values()].slice(0, 10);
+    });
+
     await browser.close();
 
-    return [];
+    return products;
   }
 }

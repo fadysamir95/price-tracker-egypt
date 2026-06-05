@@ -26,38 +26,34 @@ export class NoonService implements StoreSearchService {
 
     await page.waitForTimeout(5000);
 
-    const products = await page.$$eval(
-      'a[href*="/egypt-en/"]',
-      (items): Product[] => {
-        return items.slice(0, 30).map((item) => {
-          const text = item.textContent?.trim() || '';
+    const products = await page.$$eval('a[href*="/p/"]', (items): Product[] => {
+      return items.slice(0, 30).map((item) => {
+        const text = item.textContent?.replace(/\s+/g, ' ').trim() || '';
 
-          const title =
-            item.querySelector('div[title]')?.getAttribute('title') ||
-            item.querySelector('img')?.getAttribute('alt') ||
-            text;
+        const title =
+          item.querySelector('div[title]')?.getAttribute('title') ||
+          item.querySelector('img')?.getAttribute('alt') ||
+          text;
 
-          const priceText =
-            text.match(/[\d,.]+\s?EGP|EGP\s?[\d,.]+/)?.[0] || '';
+        const priceText = text.match(/[\d,.]+\s?EGP|EGP\s?[\d,.]+/)?.[0] || '';
 
-          const image = item.querySelector('img')?.getAttribute('src') || '';
+        const image = item.querySelector('img')?.getAttribute('src') || '';
 
-          const relativeUrl = item.getAttribute('href') || '';
+        const relativeUrl = item.getAttribute('href') || '';
 
-          const cleanPrice = Number(priceText.replace(/[^\d.]/g, ''));
+        const cleanPrice = Number(priceText.replace(/[^\d.]/g, ''));
 
-          return {
-            title,
-            price: cleanPrice,
-            image,
-            url: relativeUrl.startsWith('http')
-              ? relativeUrl
-              : `https://www.noon.com${relativeUrl}`,
-            store: 'Noon Egypt',
-          };
-        });
-      },
-    );
+        return {
+          title,
+          price: cleanPrice,
+          image,
+          url: relativeUrl.startsWith('http')
+            ? relativeUrl
+            : `https://www.noon.com${relativeUrl}`,
+          store: 'Noon Egypt',
+        };
+      });
+    });
 
     fs.writeFileSync('noon-page.html', await page.content());
 
@@ -65,12 +61,18 @@ export class NoonService implements StoreSearchService {
 
     await browser.close();
 
-    return products.filter(
-      (product) =>
+    const searchWords = query.toLowerCase().split(' ').filter(Boolean);
+
+    return products.filter((product) => {
+      const title = product.title.toLowerCase();
+
+      return (
         product.title &&
         product.url &&
+        searchWords.every((word) => title.includes(word)) &&
         !Number.isNaN(product.price) &&
-        product.price > 0,
-    );
+        product.price > 5000
+      );
+    });
   }
 }
