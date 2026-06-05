@@ -1,68 +1,116 @@
 import { Injectable } from '@nestjs/common';
 import { chromium } from 'playwright';
+import * as fs from 'fs';
 import { Product, StoreSearchService } from './product-search.types';
+
+const DESKTOP_USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+  '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 @Injectable()
 export class AmazonService implements StoreSearchService {
   async search(query: string): Promise<Product[]> {
     const browser = await chromium.launch({
       headless: true,
+      args: ['--disable-blink-features=AutomationControlled'],
     });
 
-    const page = await browser.newPage();
+    try {
+      const page = await browser.newPage({
+        locale: 'en-US',
+        userAgent: DESKTOP_USER_AGENT,
+      });
 
-    const searchUrl = `https://www.amazon.eg/s?k=${encodeURIComponent(query)}`;
+      await page.setExtraHTTPHeaders({
+        'accept-language': 'en-EG,en;q=0.9',
+      });
 
-    await page.goto(searchUrl, {
-      waitUntil: 'domcontentloaded',
-      timeout: 60000,
-    });
+      const searchUrl = `https://www.amazon.eg/s?k=${encodeURIComponent(query)}`;
 
-    const products = await page.$$eval(
-      '[data-component-type="s-search-result"]',
-      (items): Product[] => {
-        return items.slice(0, 10).map((item) => {
-          const title =
-            item.querySelector('h2 span')?.textContent?.trim() || '';
+      await page.goto(searchUrl, {
+        waitUntil: 'domcontentloaded',
+        timeout: 60000,
+      });
 
-          const priceText =
-            item.querySelector('.a-price .a-offscreen')?.textContent?.trim() ||
-            '';
+      const pageTitle = await page.title();
+      const resultCardsCount = await page
+        .locator('[data-component-type="s-search-result"]')
+        .count();
 
-          const image = item.querySelector('img')?.getAttribute('src') || '';
+      console.log('AMAZON PAGE TITLE:', pageTitle);
+      console.log('AMAZON RESULT CARDS:', resultCardsCount);
 
-          const relativeUrl =
-            item.querySelector('a.a-link-normal')?.getAttribute('href') || '';
+      if (resultCardsCount === 0) {
+        fs.writeFileSync('amazon-page.html', await page.content());
+        console.log('AMAZON HTML FILE CREATED');
+      }
 
-          const cleanPrice = Number(priceText.replace(/[^\d.]/g, ''));
+      const products = await page.$$eval(
+        '[data-component-type="s-search-result"]',
+        (items): Product[] => {
+          return items.slice(0, 10).map((item) => {
+            const title =
+              item.querySelector('h2 span')?.textContent?.trim() ||
+              item.querySelector('h2')?.textContent?.trim() ||
+              item
+                .querySelector('[data-cy="title-recipe"]')
+                ?.textContent?.trim() ||
+              '';
 
-          const match = relativeUrl.match(/\/dp\/([A-Z0-9]+)/);
+            const priceText =
+              item
+                .querySelector('.a-price .a-offscreen')
+                ?.textContent?.trim() ||
+              item.querySelector('.a-price-whole')?.textContent?.trim() ||
+              '';
 
-          const cleanUrl = match ? `https://www.amazon.eg/dp/${match[1]}` : '';
+            const image = item.querySelector('img')?.getAttribute('src') || '';
 
-          return {
-            title,
-            price: cleanPrice,
-            image,
-            url: cleanUrl,
-            store: 'Amazon Egypt',
-          };
-        });
-      },
-    );
+            const relativeUrl =
+              item
+                .querySelector('a[href*="/dp/"], a[href*="/gp/product/"]')
+                ?.getAttribute('href') || '';
 
-    await browser.close();
+            const cleanPrice = Number(priceText.replace(/[^\d.]/g, ''));
 
-    const searchWords = query.toLowerCase().split(' ').filter(Boolean);
+            const match = relativeUrl.match(
+              /\/(?:dp|gp\/product)\/([A-Z0-9]+)/,
+            );
 
-    return products.filter((product) => {
-      const title = product.title.toLowerCase();
+            const cleanUrl = match
+              ? `https://www.amazon.eg/dp/${match[1]}`
+              : '';
 
-      const containsAllWords = searchWords.every((word) =>
-        title.includes(word),
+            return {
+              title,
+              price: cleanPrice,
+              image,
+              url: cleanUrl,
+              store: 'Amazon Egypt',
+            };
+          });
+        },
       );
 
-      return containsAllWords && product.price > 5000;
-    });
+      const searchWords = query.toLowerCase().split(' ').filter(Boolean);
+
+      return products.filter((product) => {
+        const title = product.title.toLowerCase();
+
+        const containsAllWords = searchWords.every((word) =>
+          title.includes(word),
+        );
+
+        return (
+          product.title &&
+          product.url &&
+          containsAllWords &&
+          !Number.isNaN(product.price) &&
+          product.price > 5000
+        );
+      });
+    } finally {
+      await browser.close();
+    }
   }
 }
