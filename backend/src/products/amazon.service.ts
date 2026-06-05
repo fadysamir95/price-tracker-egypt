@@ -48,7 +48,8 @@ export class AmazonService implements StoreSearchService {
           pageTitle.includes('عذر') ||
           pageTitle.toLowerCase().includes('sorry')
         ) {
-          throw new Error('Amazon returned a blocked/sorry page');
+          console.log('AMAZON PLAYWRIGHT BLOCKED, USING HTML FALLBACK');
+          return this.searchWithHtmlFallback(query);
         }
       }
 
@@ -119,5 +120,100 @@ export class AmazonService implements StoreSearchService {
     } finally {
       await browser.close();
     }
+  }
+
+  private async searchWithHtmlFallback(query: string): Promise<Product[]> {
+    const searchUrl = `https://www.amazon.eg/s?k=${encodeURIComponent(query)}`;
+    const response = await fetch(searchUrl, {
+      headers: {
+        accept:
+          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'accept-language': 'en-EG,en;q=0.9',
+        'user-agent': DESKTOP_USER_AGENT,
+      },
+    });
+
+    const html = await response.text();
+    const products = this.parseAmazonHtml(html);
+    const searchWords = query.toLowerCase().split(' ').filter(Boolean);
+
+    console.log('AMAZON FALLBACK STATUS:', response.status);
+    console.log('AMAZON FALLBACK COUNT:', products.length);
+
+    return products.filter((product) => {
+      const title = product.title.toLowerCase();
+
+      return (
+        searchWords.every((word) => title.includes(word)) &&
+        !Number.isNaN(product.price) &&
+        product.price > 5000
+      );
+    });
+  }
+
+  private parseAmazonHtml(html: string): Product[] {
+    return html
+      .split('data-component-type="s-search-result"')
+      .slice(1, 25)
+      .map((card) => this.parseAmazonCard(card))
+      .filter((product): product is Product => Boolean(product))
+      .slice(0, 10);
+  }
+
+  private parseAmazonCard(card: string): Product | null {
+    const asin = this.matchHtmlAttribute(card, 'data-asin');
+    const title = this.decodeHtml(
+      this.matchHtmlAttribute(card, 'alt') ||
+        this.matchInnerText(card, 'h2') ||
+        '',
+    );
+    const image = this.matchHtmlAttribute(card, 'src') || '';
+    const priceText =
+      this.matchClassText(card, 'a-offscreen') ||
+      this.matchClassText(card, 'a-price-whole') ||
+      '';
+    const price = Number(priceText.replace(/[^\d.]/g, ''));
+
+    if (!asin || !title || Number.isNaN(price)) {
+      return null;
+    }
+
+    return {
+      title,
+      price,
+      image,
+      url: `https://www.amazon.eg/dp/${asin}`,
+      store: 'Amazon Egypt',
+    };
+  }
+
+  private matchHtmlAttribute(html: string, attribute: string): string {
+    const match = html.match(new RegExp(`${attribute}="([^"]+)"`));
+    return match?.[1] || '';
+  }
+
+  private matchClassText(html: string, className: string): string {
+    const match = html.match(
+      new RegExp(`<[^>]*class="[^"]*${className}[^"]*"[^>]*>([^<]+)`),
+    );
+    return this.decodeHtml(match?.[1] || '');
+  }
+
+  private matchInnerText(html: string, tagName: string): string {
+    const match = html.match(new RegExp(`<${tagName}[^>]*>(.*?)</${tagName}>`));
+    return this.stripHtml(match?.[1] || '');
+  }
+
+  private stripHtml(html: string): string {
+    return this.decodeHtml(html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '));
+  }
+
+  private decodeHtml(value: string): string {
+    return value
+      .replace(/&nbsp;|&#160;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .trim();
   }
 }

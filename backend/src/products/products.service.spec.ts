@@ -1,7 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ProductsService } from './products.service';
 import { AmazonService } from './amazon.service';
-import { NoonService } from './noon.service';
 import { BtechService } from './btech.service';
 import { TwobService } from './twob.service';
 import { StoreSearchService } from './product-search.types';
@@ -9,7 +8,6 @@ import { StoreSearchService } from './product-search.types';
 describe('ProductsService', () => {
   let service: ProductsService;
   let amazonService: jest.Mocked<StoreSearchService>;
-  let noonService: jest.Mocked<StoreSearchService>;
   let btechService: jest.Mocked<StoreSearchService>;
   let twobService: jest.Mocked<StoreSearchService>;
 
@@ -19,7 +17,6 @@ describe('ProductsService', () => {
 
   beforeEach(async () => {
     amazonService = createStoreSearchService();
-    noonService = createStoreSearchService();
     btechService = createStoreSearchService();
     twobService = createStoreSearchService();
 
@@ -27,7 +24,6 @@ describe('ProductsService', () => {
       providers: [
         ProductsService,
         { provide: AmazonService, useValue: amazonService },
-        { provide: NoonService, useValue: noonService },
         { provide: BtechService, useValue: btechService },
         { provide: TwobService, useValue: twobService },
       ],
@@ -50,15 +46,6 @@ describe('ProductsService', () => {
         store: 'Amazon Egypt',
       },
     ]);
-    noonService.search.mockResolvedValue([
-      {
-        title: 'iPhone 16',
-        price: 60000,
-        image: 'noon.jpg',
-        url: 'https://noon.com/product',
-        store: 'Noon Egypt',
-      },
-    ]);
     btechService.search.mockResolvedValue([]);
     twobService.search.mockResolvedValue([
       {
@@ -71,7 +58,6 @@ describe('ProductsService', () => {
     ]);
 
     await expect(service.searchProducts('iphone 16')).resolves.toEqual([
-      expect.objectContaining({ store: 'Noon Egypt', price: 60000 }),
       expect.objectContaining({ store: '2B', price: 65000 }),
       expect.objectContaining({ store: 'Amazon Egypt', price: 70000 }),
     ]);
@@ -79,7 +65,6 @@ describe('ProductsService', () => {
 
   it('continues searching when one store fails', async () => {
     amazonService.search.mockRejectedValue(new Error('blocked'));
-    noonService.search.mockResolvedValue([]);
     btechService.search.mockResolvedValue([
       {
         title: 'iPhone 16',

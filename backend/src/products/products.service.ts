@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { AmazonService } from './amazon.service';
-import { NoonService } from './noon.service';
 import { BtechService } from './btech.service';
 import { TwobService } from './twob.service';
 import { Product, StoreSearchService } from './product-search.types';
@@ -18,13 +17,11 @@ export class ProductsService {
 
   constructor(
     private readonly amazonService: AmazonService,
-    private readonly noonService: NoonService,
     private readonly btechService: BtechService,
     private readonly twobService: TwobService,
   ) {
     this.storeSearchProviders = [
       { name: 'AMAZON', service: this.amazonService },
-      { name: 'NOON', service: this.noonService },
       { name: 'BTECH', service: this.btechService },
       { name: '2B', service: this.twobService },
     ];
