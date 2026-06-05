@@ -3,61 +3,56 @@ import { AmazonService } from './amazon.service';
 import { NoonService } from './noon.service';
 import { BtechService } from './btech.service';
 import { TwobService } from './twob.service';
+import { Product, StoreSearchService } from './product-search.types';
 
-type Product = {
-    title: string;
-    price: number;
-    image: string;
-    url: string;
-    store: string;
+type StoreSearchProvider = {
+  name: string;
+  service: StoreSearchService;
 };
 
 @Injectable()
 export class ProductsService {
-    constructor(
-        private readonly amazonService: AmazonService,
-        private readonly noonService: NoonService,
-        private readonly btechService: BtechService,
-        private readonly twobService: TwobService,
-    ) { }
+  private readonly storeSearchProviders: StoreSearchProvider[];
 
-    async searchProducts(query: string) {
-        console.log('PRODUCTS SERVICE CALLED');
-        console.log('QUERY:', query);
+  constructor(
+    private readonly amazonService: AmazonService,
+    private readonly noonService: NoonService,
+    private readonly btechService: BtechService,
+    private readonly twobService: TwobService,
+  ) {
+    this.storeSearchProviders = [
+      { name: 'AMAZON', service: this.amazonService },
+      { name: 'NOON', service: this.noonService },
+      { name: 'BTECH', service: this.btechService },
+      { name: '2B', service: this.twobService },
+    ];
+  }
 
-        const amazonResults = await this.amazonService.search(query);
-        console.log('AMAZON COUNT:', amazonResults.length);
+  async searchProducts(query: string): Promise<Product[]> {
+    console.log('PRODUCTS SERVICE CALLED');
+    console.log('QUERY:', query);
 
-        let noonResults: Product[] = [];
-        let btechResults: Product[] = [];
-        let twobResults: Product[] = [];
+    const results = await Promise.all(
+      this.storeSearchProviders.map((provider) =>
+        this.searchStore(provider, query),
+      ),
+    );
 
-        try {
-            noonResults = await this.noonService.search(query);
-            console.log('NOON COUNT:', noonResults.length);
-        } catch (error) {
-            console.log('NOON FAILED');
-            console.log((error as Error).message);
-        }
+    return results.flat().sort((a, b) => a.price - b.price);
+  }
 
-        try {
-            btechResults = await this.btechService.search(query);
-            console.log('BTECH COUNT:', btechResults.length);
-        } catch (error) {
-            console.log('BTECH FAILED');
-            console.log((error as Error).message);
-        }
-
-        try {
-            twobResults = await this.twobService.search(query);
-            console.log('2B COUNT:', twobResults.length);
-        } catch (error) {
-            console.log('2B FAILED');
-            console.log((error as Error).message);
-        }
-
-        return [...amazonResults, ...noonResults, ...btechResults, ...twobResults].sort(
-            (a, b) => a.price - b.price,
-        );
+  private async searchStore(
+    provider: StoreSearchProvider,
+    query: string,
+  ): Promise<Product[]> {
+    try {
+      const results = await provider.service.search(query);
+      console.log(`${provider.name} COUNT:`, results.length);
+      return results;
+    } catch (error) {
+      console.log(`${provider.name} FAILED`);
+      console.log((error as Error).message);
+      return [];
     }
+  }
 }
