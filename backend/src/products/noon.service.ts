@@ -31,12 +31,37 @@ export class NoonService implements StoreSearchService {
         'accept-language': 'en-EG,en;q=0.9',
       });
 
-      await page.goto(searchUrl, {
-        waitUntil: 'domcontentloaded',
-        timeout: 90000,
+      await page.route('**/*', (route) => {
+        const resourceType = route.request().resourceType();
+
+        if (['font', 'image', 'media'].includes(resourceType)) {
+          return route.abort();
+        }
+
+        return route.continue();
       });
 
+      try {
+        await page.goto(searchUrl, {
+          waitUntil: 'commit',
+          timeout: 30000,
+        });
+
+        await page.waitForLoadState('domcontentloaded', {
+          timeout: 30000,
+        });
+      } catch (error) {
+        console.log('NOON NAVIGATION WARNING');
+        console.log((error as Error).message);
+      }
+
       await page.waitForTimeout(5000);
+
+      const pageTitle = await page.title();
+      const productLinksCount = await page.locator('a[href*="/p/"]').count();
+
+      console.log('NOON PAGE TITLE:', pageTitle);
+      console.log('NOON PRODUCT LINKS:', productLinksCount);
 
       const products = await page.$$eval(
         'a[href*="/p/"]',

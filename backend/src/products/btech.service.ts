@@ -28,7 +28,7 @@ export class BtechService implements StoreSearchService {
     if (title.includes('520')) {
       console.log('BTECH BLOCKED OR SERVER ERROR');
       await browser.close();
-      return [];
+      throw new Error('B.TECH returned a blocked/server error page');
     }
 
     fs.writeFileSync('btech-page.html', await page.content());

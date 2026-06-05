@@ -43,6 +43,13 @@ export class AmazonService implements StoreSearchService {
       if (resultCardsCount === 0) {
         fs.writeFileSync('amazon-page.html', await page.content());
         console.log('AMAZON HTML FILE CREATED');
+
+        if (
+          pageTitle.includes('عذر') ||
+          pageTitle.toLowerCase().includes('sorry')
+        ) {
+          throw new Error('Amazon returned a blocked/sorry page');
+        }
       }
 
       const products = await page.$$eval(
