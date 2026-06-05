@@ -44,24 +44,31 @@ export class NoonService implements StoreSearchService {
       try {
         await page.goto(searchUrl, {
           waitUntil: 'commit',
-          timeout: 30000,
+          timeout: 15000,
         });
 
         await page.waitForLoadState('domcontentloaded', {
-          timeout: 30000,
+          timeout: 15000,
         });
       } catch (error) {
         console.log('NOON NAVIGATION WARNING');
         console.log((error as Error).message);
+        await page.evaluate(() => window.stop()).catch(() => undefined);
       }
 
-      await page.waitForTimeout(5000);
+      await page.waitForTimeout(3000);
 
       const pageTitle = await page.title();
       const productLinksCount = await page.locator('a[href*="/p/"]').count();
 
       console.log('NOON PAGE TITLE:', pageTitle);
       console.log('NOON PRODUCT LINKS:', productLinksCount);
+
+      if (productLinksCount === 0) {
+        fs.writeFileSync('noon-page.html', await page.content());
+        console.log('NOON HTML FILE CREATED');
+        return [];
+      }
 
       const products = await page.$$eval(
         'a[href*="/p/"]',

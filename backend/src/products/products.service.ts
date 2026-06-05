@@ -10,6 +10,8 @@ type StoreSearchProvider = {
   service: StoreSearchService;
 };
 
+const STORE_SEARCH_TIMEOUT_MS = 45_000;
+
 @Injectable()
 export class ProductsService {
   private readonly storeSearchProviders: StoreSearchProvider[];
@@ -45,14 +47,35 @@ export class ProductsService {
     provider: StoreSearchProvider,
     query: string,
   ): Promise<Product[]> {
+    let timeoutId: NodeJS.Timeout | undefined;
+
     try {
-      const results = await provider.service.search(query);
+      const timeoutPromise = new Promise<Product[]>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(
+            new Error(
+              `${provider.name} search timed out after ${
+                STORE_SEARCH_TIMEOUT_MS / 1000
+              }s`,
+            ),
+          );
+        }, STORE_SEARCH_TIMEOUT_MS);
+      });
+
+      const results = await Promise.race([
+        provider.service.search(query),
+        timeoutPromise,
+      ]);
       console.log(`${provider.name} COUNT:`, results.length);
       return results;
     } catch (error) {
       console.log(`${provider.name} FAILED`);
       console.log((error as Error).message);
       return [];
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
     }
   }
 }
